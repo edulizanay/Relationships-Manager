@@ -1,24 +1,25 @@
 'use client';
 import React from 'react';
 
-interface WelcomeStepProps {
-  onStart: () => void;
-}
-
-const WelcomeStep: React.FC<WelcomeStepProps> = ({ onStart }) => (
-  <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-cyan-50 flex items-center justify-center">
-    <div className="text-center transform hover:scale-105 transition-transform duration-300">
-      <div className="mb-8">
-        <h1 className="text-5xl font-bold mb-4" style={{ background: 'linear-gradient(135deg, #6b4ba3 0%, #563d92 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-          Relationship Manager
+const WelcomeStep: React.FC = () => {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-amber-50">
+      <div className="max-w-2xl mx-auto text-center p-8">
+        <h1 className="text-4xl font-bold text-gray-900 mb-6">
+          Welcome to Relationship Manager
         </h1>
-        <p className="text-xl text-gray-600">Organize and nurture your meaningful connections</p>
+        <p className="text-xl text-gray-600 mb-8">
+          Let's take a moment to reflect on your relationships and strengthen the connections that matter.
+        </p>
+        <button
+          onClick={() => {}}
+          className="px-8 py-4 bg-purple-600 text-white rounded-xl font-semibold text-lg shadow-lg hover:bg-purple-700 transition-all duration-200 transform hover:scale-105"
+        >
+          Add new relationships
+        </button>
       </div>
-      <button onClick={onStart} className="px-12 py-4 text-white font-semibold rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1" style={{ background: 'linear-gradient(135deg, #f5c24c 0%, #e9c46a 100%)', color: '#563d92' }}>
-        Start Organizing ✨
-      </button>
     </div>
-  </div>
-);
+  );
+};
 
 export default WelcomeStep; 

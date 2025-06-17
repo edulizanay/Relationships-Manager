@@ -5,7 +5,7 @@ export interface Relationship {
   relationshipStatus: 'satisfied' | 'improve' | null;
 }
 
-export type Step = 'welcome' | 'sorting' | 'reflection';
+export type Step = 'welcome' | 'sorting' | 'reflection' | 'dashboard';
 export type RelationshipColumns = Record<string, Relationship[]>;
 export type RoundingSide = 'left' | 'right' | 'full' | 'none';
 

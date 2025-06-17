@@ -19,7 +19,7 @@ export const RELATIONSHIP_CATEGORIES = {
 export const INITIAL_PEOPLE = [
   { id: 1, name: "Mom" }, { id: 2, name: "Dad" }, { id: 3, name: "Tomás" },
   { id: 4, name: "Laurine" }, { id: 5, name: "Joaquín" }, { id: 6, name: "Rodrigo Orpis" },
-  { id: 7, name: "Javier Ferraz" }, { id: 8, name: "Javier Cabrera" }
+  { id: 7, name: "Kerim" }, { id: 8, name: "Javier Cabrera" }, { id: 9, name: "Javier Ferraz" }
 ];
 
 export const RELATIONSHIP_STATUS_LABELS = {

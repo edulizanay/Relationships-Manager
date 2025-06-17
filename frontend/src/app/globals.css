@@ -1,5 +1,20 @@
 @import "tailwindcss";
 
+/*
+OFFICIAL COLOR PALETTE:
+- Primary Gold: #f5c24c (warm honey tone)
+- Secondary Gold: #e9c46a (lighter honey)
+- Background Honey: #fffcf2 (pale honey for subtle backgrounds)
+- Primary Purple: #6b4ba3 (main brand purple)
+- Dark Purple: #563d92 (hover/active states)
+- Nature Green: #84a98c (natural healing accent)
+- Primary Text: #332211 (dark brown for primary text, headings, body copy)
+- White: #ffffff
+- Black: #000000
+- Font: Nunito
+*/
+
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

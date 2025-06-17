@@ -134,10 +134,9 @@ const DroppableColumn: React.FC<{
 interface SortingStepProps {
   relationshipsByColumn: RelationshipColumns;
   setRelationshipsByColumn: React.Dispatch<React.SetStateAction<RelationshipColumns>>;
-  onSubmit: () => void;
 }
 
-const SortingStep: React.FC<SortingStepProps> = ({ relationshipsByColumn, setRelationshipsByColumn, onSubmit }) => {
+const SortingStep: React.FC<SortingStepProps> = ({ relationshipsByColumn, setRelationshipsByColumn }) => {
   const [isCompleting, setIsCompleting] = React.useState(false);
   const [overId, setOverId] = useState<string | null>(null);
   const [activeRelationship, setActiveRelationship] = useState<Relationship | null>(null);
@@ -146,10 +145,10 @@ const SortingStep: React.FC<SortingStepProps> = ({ relationshipsByColumn, setRel
     if (relationshipsByColumn[COLUMN_IDS.UNCATEGORIZED].length === 0 && !isCompleting) {
       setIsCompleting(true);
       setTimeout(() => {
-        onSubmit();
+        // onNext();
       }, 500);
     }
-  }, [relationshipsByColumn, onSubmit, isCompleting]);
+  }, [relationshipsByColumn, isCompleting]);
 
   const handleDragStart = (event: DragStartEvent) => {
     const relationship = event.active.data.current?.relationship;
@@ -191,6 +190,11 @@ const SortingStep: React.FC<SortingStepProps> = ({ relationshipsByColumn, setRel
         newColumns[targetColumnId] = [...newColumns[targetColumnId], updatedCard];
         return newColumns;
     });
+  };
+
+  const handleSubmit = () => {
+    // Any validation or processing logic here
+    // onNext();
   };
 
   return (
