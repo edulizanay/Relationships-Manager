@@ -2,6 +2,8 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { generateBallPositions, generateMovementPattern } from '../../utils/physics';
+import { relationshipsApi } from '../../services/relationshipsApi';
+import { Step } from '../shared/types';
 
 // --- Types ---
 interface Person {
@@ -24,126 +26,87 @@ interface BallNode {
 }
 
 interface RelationshipDashboardProps {
+  onNavigate: (step: Step) => void;
 }
-
-// --- Mock Data ---
-const MOCK_PEOPLE: Person[] = [
-  {
-    id: '1',
-    name: 'Dad',
-    urgencyLevel: 5,
-    context: "Haven't talked in 3 months",
-    ctaText: "Send a quick text"
-  },
-  {
-    id: '2',
-    name: 'Mom',
-    urgencyLevel: 4,
-    context: "Last call was 2 weeks ago",
-    ctaText: "Schedule a call"
-  },
-  {
-    id: '3',
-    name: 'Tomás',
-    urgencyLevel: 3,
-    context: "Missed his birthday last week",
-    ctaText: "Send belated wishes"
-  },
-  {
-    id: '4',
-    name: 'Laurine',
-    urgencyLevel: 5,
-    context: "Haven't seen in 6 months",
-    ctaText: "Plan a meetup"
-  },
-  {
-    id: '5',
-    name: 'Grandma',
-    urgencyLevel: 4,
-    context: "Weekly call missed",
-    ctaText: "Call now"
-  },
-  {
-    id: '6',
-    name: 'Alex',
-    urgencyLevel: 2,
-    context: "Last message 2 days ago",
-    ctaText: "Continue conversation"
-  },
-  {
-    id: '7',
-    name: 'Sarah',
-    urgencyLevel: 3,
-    context: "Birthday coming up",
-    ctaText: "Plan celebration"
-  },
-  {
-    id: '8',
-    name: 'Uncle John',
-    urgencyLevel: 1,
-    context: "Regular monthly check-in due",
-    ctaText: "Schedule call"
-  },
-  {
-    id: '9',
-    name: 'Emma',
-    urgencyLevel: 4,
-    context: "Job interview yesterday",
-    ctaText: "Ask how it went"
-  },
-  {
-    id: '10',
-    name: 'Carlos',
-    urgencyLevel: 2,
-    context: "Shared funny meme",
-    ctaText: "Reply with laugh"
-  },
-  {
-    id: '11',
-    name: 'Jessica',
-    urgencyLevel: 5,
-    context: "Going through divorce",
-    ctaText: "Check in on her"
-  },
-  {
-    id: '12',
-    name: 'Mike',
-    urgencyLevel: 3,
-    context: "New baby last month",
-    ctaText: "Congratulate him"
-  },
-  {
-    id: '13',
-    name: 'Lisa',
-    urgencyLevel: 1,
-    context: "Regular coffee date",
-    ctaText: "Schedule meetup"
-  },
-  {
-    id: '14',
-    name: 'Kevin',
-    urgencyLevel: 4,
-    context: "Started new job",
-    ctaText: "Ask about work"
-  },
-  {
-    id: '15',
-    name: 'Nina',
-    urgencyLevel: 2,
-    context: "Concert next week",
-    ctaText: "Discuss plans"
-  },
-  {
-    id: '16',
-    name: 'Roberto',
-    urgencyLevel: 3,
-    context: "Moving to new city",
-    ctaText: "Offer help"
-  }
-];
 
 // --- Helper Functions ---
 // Physics-related utilities moved to /src/utils/physics.ts
+
+// --- Floating Action Components ---
+const FloatingButton: React.FC<{
+  onClick: () => void;
+  tooltip: string;
+  className: string;
+  children: React.ReactNode;
+  badge?: number;
+}> = ({ onClick, tooltip, className, children, badge }) => {
+  return (
+    <div className="group relative">
+      <button
+        onClick={onClick}
+        className={`${className} relative transition-all duration-200 transform hover:scale-110`}
+      >
+        {children}
+        {badge && (
+          <span className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
+            {badge}
+          </span>
+        )}
+      </button>
+      <div className="absolute -left-2 top-1/2 transform -translate-y-1/2 -translate-x-full bg-gray-800 text-white px-2 py-1 rounded text-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
+        {tooltip}
+      </div>
+    </div>
+  );
+};
+
+const FloatingActions: React.FC<{
+  onNavigate: (step: Step) => void;
+  unsortedCount: number;
+}> = ({ onNavigate, unsortedCount }) => {
+  return (
+    <div className="fixed top-6 right-6 z-50">
+      <div className="flex flex-col gap-3">
+        {/* Add Contact Icon */}
+        <FloatingButton 
+          onClick={() => onNavigate('contacts')} 
+          tooltip="Add Contact"
+          className="w-12 h-12 bg-purple-600 hover:bg-purple-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+        </FloatingButton>
+        
+        {/* Edit/Manage Icon */}
+        <FloatingButton 
+          onClick={() => onNavigate('contacts')} 
+          tooltip="Manage Contacts"
+          className="w-12 h-12 bg-gray-600 hover:bg-gray-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+        </FloatingButton>
+        
+        {/* Sort Icon - Only show if unsorted contacts exist */}
+        {unsortedCount > 0 && (
+          <FloatingButton 
+            onClick={() => onNavigate('sorting')} 
+            tooltip={`Sort ${unsortedCount} New Contacts`}
+            className="w-12 h-12 bg-amber-600 hover:bg-amber-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center relative"
+            badge={unsortedCount}
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5a2 2 0 012-2h4a2 2 0 012 2v6H8V5z" />
+            </svg>
+          </FloatingButton>
+        )}
+      </div>
+    </div>
+  );
+};
 
 // --- Components ---
 const SidePanel: React.FC<{
@@ -240,7 +203,7 @@ const SidePanel: React.FC<{
                 transition={{ duration: 0.3, delay: 0.1 }}
                 className="space-y-2"
               >
-                <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">What's happening</h3>
+                <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">What&apos;s happening</h3>
                 <p className="text-gray-700 leading-relaxed">{person.context}</p>
               </motion.div>
 
@@ -343,11 +306,42 @@ const Ball: React.FC<{
 };
 
 // --- Main Component ---
-const RelationshipDashboard: React.FC<RelationshipDashboardProps> = () => {
+const RelationshipDashboard: React.FC<RelationshipDashboardProps> = ({ onNavigate }) => {
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [nodes, setNodes] = useState<BallNode[]>([]);
   const [selectedBallId, setSelectedBallId] = useState<string | null>(null);
   const [panelVisible, setPanelVisible] = useState(false);
+  
+  // API state management
+  const [relationships, setRelationships] = useState<Person[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [unsortedCount, setUnsortedCount] = useState(0);
+
+  // Fetch relationships data
+  const fetchRelationships = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await relationshipsApi.getRelationships();
+      setRelationships(data);
+      
+      // Calculate unsorted count (contacts without relationshipType)
+      // For now, we'll assume all contacts are sorted since we don't have relationshipType in the API response
+      // This will be updated when we implement the sorting functionality
+      setUnsortedCount(0);
+    } catch (err) {
+      console.error('Failed to fetch relationships:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load relationships');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Load relationships on component mount
+  useEffect(() => {
+    fetchRelationships();
+  }, [fetchRelationships]);
 
   // Initialize and handle window resize
   useEffect(() => {
@@ -356,14 +350,14 @@ const RelationshipDashboard: React.FC<RelationshipDashboardProps> = () => {
       const newHeight = window.innerHeight;
       setDimensions({ width: newWidth, height: newHeight });
       
-      if (newWidth > 0 && newHeight > 0) {
+      if (newWidth > 0 && newHeight > 0 && relationships.length > 0) {
         // Configure the central text area
         const centralArea = {
           width: Math.min(400, newWidth * 0.6),
           height: 80
         };
         
-        setNodes(generateBallPositions(newWidth, newHeight, MOCK_PEOPLE, centralArea));
+        setNodes(generateBallPositions(newWidth, newHeight, relationships, centralArea));
       }
     };
 
@@ -383,7 +377,7 @@ const RelationshipDashboard: React.FC<RelationshipDashboardProps> = () => {
       window.removeEventListener('resize', handleResize);
       clearTimeout(resizeTimer);
     };
-  }, []);
+  }, [relationships]);
 
   // Click-based interaction
   const handleBallClick = useCallback((ballId: string) => {
@@ -406,6 +400,54 @@ const RelationshipDashboard: React.FC<RelationshipDashboardProps> = () => {
 
   const selectedPerson = selectedBallId ? nodes.find(node => node.id === selectedBallId) || null : null;
 
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-amber-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-gray-600 text-lg mb-4">Loading your relationships...</div>
+          <div className="animate-spin h-8 w-8 border-4 border-purple-600 border-t-transparent rounded-full mx-auto"></div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-amber-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-red-600 mb-4">Connection Error</h2>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <button 
+            onClick={fetchRelationships} 
+            className="px-6 py-3 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Empty state
+  if (relationships.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-amber-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Welcome to Relationship Manager</h2>
+          <p className="text-gray-600 mb-6">Start by adding your first contacts</p>
+          <button 
+            onClick={() => onNavigate('contacts')} 
+            className="px-6 py-3 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition-colors"
+          >
+            Add Your First Contact
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Show loading state while dimensions are being calculated
   if (dimensions.width === 0 || dimensions.height === 0) {
     return (
@@ -423,6 +465,9 @@ const RelationshipDashboard: React.FC<RelationshipDashboardProps> = () => {
         onClick={handleBackgroundClick}
       />
       
+      {/* Floating Action Panel */}
+      <FloatingActions onNavigate={onNavigate} unsortedCount={unsortedCount} />
+      
       {/* SVG - Full Screen */}
       <svg className="w-screen h-screen relative z-10 pointer-events-none">
         {/* Center Text */}
@@ -433,7 +478,7 @@ const RelationshipDashboard: React.FC<RelationshipDashboardProps> = () => {
           textAnchor="middle"
           dominantBaseline="middle"
         >
-          {MOCK_PEOPLE.length} people miss you
+          {relationships.length} people miss you
         </text>
 
         {/* Balls */}

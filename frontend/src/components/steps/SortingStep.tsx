@@ -1,21 +1,28 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { DndContext, useDraggable, useDroppable, DragEndEvent, DragOverEvent, DragStartEvent, DragOverlay } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { Relationship, RelationshipColumns, RoundingSide } from '../shared/types';
+import { Step } from '../shared/types';
 import { RELATIONSHIP_CATEGORIES, RELATIONSHIP_STATUS_LABELS, COLUMN_IDS } from '../shared/constants';
+import { contactsApi } from '../../services/contactsApi';
+import { Contact } from '../../types/contact';
+
+// --- Types ---
+interface SortingStepProps {
+  onNavigate: (step: Step) => void;
+}
 
 // --- Core UI Components (Cards, Columns) ---
 
-const RelationshipCard: React.FC<{ relationship: Relationship }> = ({ relationship }) => {
+const RelationshipCard: React.FC<{ contact: Contact }> = ({ contact }) => {
     const getBackgroundColor = () => {
-        if (relationship.relationshipStatus === 'improve') return '#f5c24c';
-        if (relationship.relationshipStatus === 'satisfied') return '#84a98c';
+        if (contact.urgencyLevel && contact.urgencyLevel >= 4) return '#f5c24c';
+        if (contact.urgencyLevel && contact.urgencyLevel >= 2) return '#84a98c';
         return '#ffffff';
     };
 
     const getTextColor = () => {
-        if (relationship.relationshipStatus) return '#ffffff';
+        if (contact.urgencyLevel && contact.urgencyLevel >= 2) return '#ffffff';
         return '#332211';
     };
     
@@ -25,16 +32,16 @@ const RelationshipCard: React.FC<{ relationship: Relationship }> = ({ relationsh
             style={{ backgroundColor: getBackgroundColor() }}
         >
             <h3 className="text-sm font-bold text-center" style={{ color: getTextColor() }}>
-                {relationship.name}
+                {contact.name}
             </h3>
         </div>
     );
 };
 
-const DraggableRelationshipCard: React.FC<{ relationship: Relationship }> = ({ relationship }) => {
+const DraggableRelationshipCard: React.FC<{ contact: Contact }> = ({ contact }) => {
     const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-        id: relationship.id,
-        data: { relationship },
+        id: contact.id,
+        data: { contact },
     });
     const style: React.CSSProperties = {
         transform: CSS.Translate.toString(transform),
@@ -43,7 +50,7 @@ const DraggableRelationshipCard: React.FC<{ relationship: Relationship }> = ({ r
     };
     return (
         <div ref={setNodeRef} style={style} {...listeners} {...attributes} className="hover:scale-105 transition-transform duration-200">
-            <RelationshipCard relationship={relationship} />
+            <RelationshipCard contact={contact} />
         </div>
     );
 };
@@ -60,21 +67,21 @@ const LaneDropZone: React.FC<{ id: string, label: string, color: string }> = ({ 
 const DroppableColumn: React.FC<{
     id: string;
     title: string;
-    relationships: Relationship[];
+    contacts: Contact[];
     isDropTarget?: boolean;
     overId: string | null;
-    rounding: RoundingSide;
-}> = ({ id, title, relationships, isDropTarget = false, overId, rounding }) => {
+    rounding: 'left' | 'right' | 'full' | 'none';
+}> = ({ id, title, contacts, isDropTarget = false, overId, rounding }) => {
     const { setNodeRef } = useDroppable({ id });
     const categoryData = RELATIONSHIP_CATEGORIES[id as keyof typeof RELATIONSHIP_CATEGORIES];
     const labels = RELATIONSHIP_STATUS_LABELS[id as keyof typeof RELATIONSHIP_STATUS_LABELS];
 
     const showLanes = isDropTarget && labels && overId && String(overId).startsWith(id);
     
-    const improveCards = relationships.filter(r => r.relationshipStatus === 'improve');
-    const satisfiedCards = relationships.filter(r => r.relationshipStatus !== 'improve');
+    const highUrgencyCards = contacts.filter(c => c.urgencyLevel && c.urgencyLevel >= 4);
+    const lowUrgencyCards = contacts.filter(c => !c.urgencyLevel || c.urgencyLevel < 4);
 
-    const getRoundingClasses = (side: RoundingSide) => {
+    const getRoundingClasses = (side: 'left' | 'right' | 'full' | 'none') => {
         switch(side) {
             case 'left': return 'rounded-l-2xl';
             case 'right': return 'rounded-r-2xl';
@@ -91,13 +98,13 @@ const DroppableColumn: React.FC<{
             <h2 className="text-xl font-bold text-center mb-4 h-7" style={{color: '#563d92'}}>{title}</h2>
             
             <div ref={setNodeRef} className="flex-grow flex flex-col relative">
-                {relationships.length === 0 ? (
+                {contacts.length === 0 ? (
                      <div className="h-full min-h-[320px] w-full rounded-lg" />
                 ) : isUncategorized ? (
                     <div className="h-full overflow-y-auto p-2">
                         <div className="flex flex-wrap gap-2 items-start">
-                            {relationships.map(rel => (
-                                <DraggableRelationshipCard key={rel.id} relationship={rel} />
+                            {contacts.map(contact => (
+                                <DraggableRelationshipCard key={contact.id} contact={contact} />
                             ))}
                         </div>
                     </div>
@@ -105,12 +112,12 @@ const DroppableColumn: React.FC<{
                     <div className="h-full grid grid-rows-2">
                         <div className="p-2 overflow-y-auto">
                             <div className="flex flex-wrap gap-2 items-start">
-                                {improveCards.map(rel => <DraggableRelationshipCard key={rel.id} relationship={rel} />)}
+                                {highUrgencyCards.map(contact => <DraggableRelationshipCard key={contact.id} contact={contact} />)}
                             </div>
                         </div>
                         <div className="p-2 overflow-y-auto">
                             <div className="flex flex-wrap gap-2 items-start">
-                                {satisfiedCards.map(rel => <DraggableRelationshipCard key={rel.id} relationship={rel} />)}
+                                {lowUrgencyCards.map(contact => <DraggableRelationshipCard key={contact.id} contact={contact} />)}
                             </div>
                         </div>
                     </div>
@@ -131,29 +138,41 @@ const DroppableColumn: React.FC<{
 
 // --- Main Sorting Interface ---
 
-interface SortingStepProps {
-  relationshipsByColumn: RelationshipColumns;
-  setRelationshipsByColumn: React.Dispatch<React.SetStateAction<RelationshipColumns>>;
-}
-
-const SortingStep: React.FC<SortingStepProps> = ({ relationshipsByColumn, setRelationshipsByColumn }) => {
-  const [isCompleting, setIsCompleting] = React.useState(false);
+const SortingStep: React.FC<SortingStepProps> = ({ onNavigate }) => {
   const [overId, setOverId] = useState<string | null>(null);
-  const [activeRelationship, setActiveRelationship] = useState<Relationship | null>(null);
+  const [activeContact, setActiveContact] = useState<Contact | null>(null);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  React.useEffect(() => {
-    if (relationshipsByColumn[COLUMN_IDS.UNCATEGORIZED].length === 0 && !isCompleting) {
-      setIsCompleting(true);
-      setTimeout(() => {
-        // onNext();
-      }, 500);
+  // Fetch unsorted contacts from API
+  const fetchUnsortedContacts = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const allContacts = await contactsApi.getAllContacts();
+      // Filter to only contacts without relationshipType
+      const unsorted = allContacts.filter((contact: Contact) => !contact.relationshipType);
+      setContacts(unsorted);
+    } catch (err) {
+      console.error('Failed to fetch unsorted contacts:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load contacts');
+    } finally {
+      setLoading(false);
     }
-  }, [relationshipsByColumn, isCompleting]);
+  }, []);
+
+  useEffect(() => {
+    fetchUnsortedContacts();
+  }, [fetchUnsortedContacts]);
+
+  // Check if sorting is complete (all contacts have been categorized)
+  const isSortingComplete = contacts.length === 0;
 
   const handleDragStart = (event: DragStartEvent) => {
-    const relationship = event.active.data.current?.relationship;
-    if (relationship) {
-      setActiveRelationship(relationship);
+    const contact = event.active.data.current?.contact;
+    if (contact) {
+      setActiveContact(contact);
     }
   };
 
@@ -161,74 +180,146 @@ const SortingStep: React.FC<SortingStepProps> = ({ relationshipsByColumn, setRel
     setOverId(event.over?.id as string | null);
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = async (event: DragEndEvent) => {
     setOverId(null);
-    setActiveRelationship(null);
+    setActiveContact(null);
 
     const { active, over } = event;
     if (!over) return;
 
-    const activeCard = active.data.current?.relationship as Relationship;
-    if (!activeCard) return;
+    const activeContact = active.data.current?.contact as Contact;
+    if (!activeContact) return;
 
-    const sourceColumnId = Object.keys(relationshipsByColumn).find(key => relationshipsByColumn[key].some(rel => rel.id === activeCard.id));
-    if (!sourceColumnId) return;
-
-    let [targetColumnId, targetStatus] = String(over.id).split('-');
-    if (!targetStatus) { targetColumnId = String(over.id); }
+    const parts = String(over.id).split('-');
+    const targetColumnId = parts.length > 1 ? parts[0] : String(over.id);
+    const targetStatus = parts.length > 1 ? parts[1] : null;
     if (targetColumnId === COLUMN_IDS.UNCATEGORIZED) return;
 
-    setRelationshipsByColumn(prev => {
-        const newColumns = { ...prev };
-        newColumns[sourceColumnId] = newColumns[sourceColumnId].filter(rel => rel.id !== activeCard.id);
-        const updatedCard = {
-            ...activeCard,
-            category: targetColumnId,
-            relationshipStatus: (targetStatus as 'improve' | 'satisfied' | null) || activeCard.relationshipStatus,
-        };
-        if (!newColumns[targetColumnId]) { newColumns[targetColumnId] = []; }
-        newColumns[targetColumnId] = [...newColumns[targetColumnId], updatedCard];
-        return newColumns;
-    });
+    try {
+      // Update the contact in the database
+      const urgencyLevel = targetStatus === 'improve' ? 5 : 3; // High urgency for improve, medium for satisfied
+      
+      await contactsApi.updateContact(Number(activeContact.id), {
+        relationshipType: targetColumnId as 'family' | 'friend' | 'work',
+        urgencyLevel: urgencyLevel
+      });
+
+      // Remove from local state
+      setContacts(prev => prev.filter(contact => contact.id !== activeContact.id));
+    } catch (err) {
+      console.error('Failed to update contact:', err);
+      setError('Failed to update contact. Please try again.');
+    }
   };
 
-  const handleSubmit = () => {
-    // Any validation or processing logic here
-    // onNext();
-  };
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-amber-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-gray-600 text-lg mb-4">Loading contacts to sort...</div>
+          <div className="animate-spin h-8 w-8 border-4 border-purple-600 border-t-transparent rounded-full mx-auto"></div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-amber-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-red-600 mb-4">Error Loading Contacts</h2>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <button 
+            onClick={fetchUnsortedContacts} 
+            className="px-6 py-3 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition-colors"
+          >
+            Try Again
+          </button>
+          <button 
+            onClick={() => onNavigate('dashboard')} 
+            className="ml-4 px-6 py-3 bg-gray-600 text-white rounded-xl font-medium hover:bg-gray-700 transition-colors"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Empty state - all contacts sorted
+  if (isSortingComplete) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-amber-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">All Contacts Sorted!</h2>
+          <p className="text-gray-600 mb-6">Great job! All your contacts have been categorized.</p>
+          <button 
+            onClick={() => onNavigate('dashboard')} 
+            className="px-6 py-3 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition-colors"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragOver={handleDragOver} onDragCancel={() => { setOverId(null); setActiveRelationship(null); }}>
-        <div className={`min-h-screen transition-opacity duration-500 ${isCompleting ? 'opacity-0' : 'opacity-100'}`} style={{ background: 'linear-gradient(135deg, #fffcf2 0%, #f9f9f9 100%)' }}>
+    <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragOver={handleDragOver} onDragCancel={() => { setOverId(null); setActiveContact(null); }}>
+        <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #fffcf2 0%, #f9f9f9 100%)' }}>
             <div className="max-w-7xl mx-auto px-6 py-8">
+                {/* Header with Back Button */}
+                <div className="flex items-center justify-between mb-8">
+                    <button 
+                        onClick={() => onNavigate('dashboard')} 
+                        className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                        Back to Dashboard
+                    </button>
+                </div>
+
                 <div className="text-center mb-12">
                     <h1 className="text-4xl font-bold mb-2" style={{ background: 'linear-gradient(135deg, #6b4ba3 0%, #563d92 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                        Map Your Relationships
+                        Organize Your Relationships
                     </h1>
-                    {isCompleting && (
-                        <p className="text-gray-600 text-lg mt-4">Completing mapping...</p>
-                    )}
+                    <p className="text-gray-600 text-lg mt-4">
+                        Drag each person to the category that best describes your relationship
+                    </p>
+                    <p className="text-gray-500 text-sm mt-2">
+                        {contacts.length} contact{contacts.length !== 1 ? 's' : ''} remaining to sort
+                    </p>
                 </div>
 
                 <div className="flex flex-col lg:flex-row gap-6 items-start">
                     <div className="w-full lg:w-1/4">
-                        <DroppableColumn id={COLUMN_IDS.UNCATEGORIZED} title="" relationships={relationshipsByColumn[COLUMN_IDS.UNCATEGORIZED]} overId={overId} rounding="full" />
+                        <DroppableColumn 
+                            id={COLUMN_IDS.UNCATEGORIZED} 
+                            title="Drag to categorize" 
+                            contacts={contacts} 
+                            overId={overId} 
+                            rounding="full" 
+                        />
                     </div>
 
                     <div className="w-full lg:flex-1 grid grid-cols-1 md:grid-cols-3">
-                        <DroppableColumn id={COLUMN_IDS.FAMILY} title="Family" relationships={relationshipsByColumn[COLUMN_IDS.FAMILY]} isDropTarget={true} overId={overId} rounding="left" />
-                        <DroppableColumn id={COLUMN_IDS.FRIEND} title="Friend" relationships={relationshipsByColumn[COLUMN_IDS.FRIEND]} isDropTarget={true} overId={overId} rounding="none" />
-                        <DroppableColumn id={COLUMN_IDS.WORK} title="Work" relationships={relationshipsByColumn[COLUMN_IDS.WORK]} isDropTarget={true} overId={overId} rounding="right" />
+                        <DroppableColumn id={COLUMN_IDS.FAMILY} title="Family" contacts={[]} isDropTarget={true} overId={overId} rounding="left" />
+                        <DroppableColumn id={COLUMN_IDS.FRIEND} title="Friend" contacts={[]} isDropTarget={true} overId={overId} rounding="none" />
+                        <DroppableColumn id={COLUMN_IDS.WORK} title="Work" contacts={[]} isDropTarget={true} overId={overId} rounding="right" />
                     </div>
                 </div>
             </div>
         </div>
 
         <DragOverlay>
-            {activeRelationship ? <RelationshipCard relationship={activeRelationship} /> : null}
+            {activeContact ? <RelationshipCard contact={activeContact} /> : null}
         </DragOverlay>
     </DndContext>
   );
 };
 
-export default SortingStep; 
+export default SortingStep;

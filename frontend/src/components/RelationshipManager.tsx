@@ -1,77 +1,64 @@
 'use client';
 import React, { useState } from 'react';
-import { Step, RelationshipColumns } from './shared/types';
-import { INITIAL_PEOPLE, COLUMN_IDS } from './shared/constants';
-import WelcomeStep from './steps/WelcomeStep';
+import { Step } from './shared/types';
 import SortingStep from './steps/SortingStep';
 import ReflectionStep from './steps/ReflectionStep';
 import RelationshipDashboard from './steps/RelationshipDashboard';
 
 const RelationshipManager: React.FC = () => {
-  const [currentStep, setCurrentStep] = useState<Step>('welcome');
+  const [currentStep, setCurrentStep] = useState<Step>('dashboard');
 
-  const [relationshipsByColumn, setRelationshipsByColumn] = useState<RelationshipColumns>({
-    [COLUMN_IDS.UNCATEGORIZED]: INITIAL_PEOPLE.map(person => ({ ...person, category: null, relationshipStatus: null })),
-    [COLUMN_IDS.FAMILY]: [],
-    [COLUMN_IDS.FRIEND]: [],
-    [COLUMN_IDS.WORK]: [],
-  });
-
-  // Single source of truth for navigation
-  const handleNextStep = () => {
-    switch (currentStep) {
-      case 'welcome':
-        setCurrentStep('sorting');
-        break;
-      case 'sorting':
-        setCurrentStep('reflection');
-        break;
-      case 'reflection':
-        setCurrentStep('dashboard');
-        break;
-      case 'dashboard':
-        setCurrentStep('welcome');
-        break;
-    }
+  // Simple navigation handler
+  const handleNavigate = (step: Step) => {
+    setCurrentStep(step);
   };
 
-  const getStepLabel = () => {
-    switch (currentStep) {
-      case 'welcome': return 'Go to Sorting';
-      case 'sorting': return 'Go to Reflection';
-      case 'reflection': return 'Go to Dashboard';
-      case 'dashboard': return 'Back to Welcome';
-    }
+  // Debug helper - can be removed in production
+  const getStepInfo = () => {
+    return `Current Step: ${currentStep}`;
   };
 
   return (
     <div className="relative min-h-screen">
-      {/* Step Navigation Button */}
-      <button
-        onClick={handleNextStep}
-        className="fixed bottom-4 right-4 px-6 py-3 bg-purple-600 text-white rounded-xl font-medium shadow-lg hover:bg-purple-700 transition-all duration-200 transform hover:scale-105 z-50"
-      >
-        {getStepLabel()}
-      </button>
+      {/* Debug info - remove in production */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="fixed top-4 left-4 bg-black text-white p-2 rounded text-xs z-50">
+          {getStepInfo()}
+        </div>
+      )}
 
       {/* Current Step Content */}
-      {currentStep === 'welcome' && (
-        <WelcomeStep />
-      )}
-      {currentStep === 'reflection' && (
-        <ReflectionStep relationshipsByColumn={relationshipsByColumn} />
+      {currentStep === 'dashboard' && (
+        <RelationshipDashboard onNavigate={handleNavigate} />
       )}
       {currentStep === 'sorting' && (
-        <SortingStep
-          relationshipsByColumn={relationshipsByColumn}
-          setRelationshipsByColumn={setRelationshipsByColumn}
-        />
+        <SortingStep onNavigate={handleNavigate} />
       )}
-      {currentStep === 'dashboard' && (
-        <RelationshipDashboard />
+      {currentStep === 'reflection' && (
+        <ReflectionStep onNavigate={handleNavigate} />
+      )}
+      {currentStep === 'contacts' && (
+        <div className="min-h-screen bg-gradient-to-br from-purple-50 to-amber-50 flex items-center justify-center">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Contact Management</h2>
+            <p className="text-gray-600 mb-6">Redirecting to contact management page...</p>
+            <button 
+              onClick={() => window.location.href = '/contacts'} 
+              className="px-6 py-3 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition-colors"
+            >
+              Go to Contacts
+            </button>
+            <button 
+              onClick={() => handleNavigate('dashboard')} 
+              className="ml-4 px-6 py-3 bg-gray-600 text-white rounded-xl font-medium hover:bg-gray-700 transition-colors"
+            >
+              Back to Dashboard
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
 };
 
-export default RelationshipManager; 
+export default RelationshipManager;

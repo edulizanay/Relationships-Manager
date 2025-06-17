@@ -1,7 +1,13 @@
 'use client';
-import React, { useState, useMemo } from 'react';
-import { RelationshipColumns, PersonForReflection, ReflectionQuestion } from '../shared/types';
-import { RELATIONSHIP_STATUS_LABELS } from '../shared/constants';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Step } from '../shared/types';
+import { contactsApi } from '../../services/contactsApi';
+import { Contact } from '../../types/contact';
+
+// --- Types ---
+interface ReflectionStepProps {
+  onNavigate: (step: Step) => void;
+}
 
 // --- Constants ---
 
@@ -44,34 +50,36 @@ const MOCK_INSIGHTS = [
 const CategoryTag: React.FC<{ category: string }> = ({ category }) => {
   const getCategoryColor = () => {
     switch (category) {
-      case 'Family': return 'bg-purple-100 text-purple-800';
-      case 'Friend': return 'bg-green-100 text-green-800';
-      case 'Work': return 'bg-amber-100 text-amber-800';
+      case 'family': return 'bg-purple-100 text-purple-800';
+      case 'friend': return 'bg-green-100 text-green-800';
+      case 'work': return 'bg-amber-100 text-amber-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
 
   return (
     <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${getCategoryColor()}`}>
-      {category}
+      {category.charAt(0).toUpperCase() + category.slice(1)}
     </span>
   );
 };
 
-const StatusTag: React.FC<{ category: string; status: 'satisfied' | 'improve' }> = ({ category, status }) => {
-  const getStatusColor = () => {
-    if (status === 'improve') return 'bg-amber-100 text-amber-800';
-    return 'bg-green-100 text-green-800';
+const UrgencyTag: React.FC<{ urgencyLevel: number }> = ({ urgencyLevel }) => {
+  const getUrgencyColor = () => {
+    if (urgencyLevel >= 4) return 'bg-amber-100 text-amber-800';
+    if (urgencyLevel >= 2) return 'bg-green-100 text-green-800';
+    return 'bg-gray-100 text-gray-800';
   };
 
-  const getStatusLabel = () => {
-    const labels = RELATIONSHIP_STATUS_LABELS[category as keyof typeof RELATIONSHIP_STATUS_LABELS];
-    return labels?.find(l => l.key === status)?.label || status;
+  const getUrgencyLabel = () => {
+    if (urgencyLevel >= 4) return 'High Priority';
+    if (urgencyLevel >= 2) return 'Medium Priority';
+    return 'Low Priority';
   };
 
   return (
-    <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${getStatusColor()}`}>
-      {getStatusLabel()}
+    <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${getUrgencyColor()}`}>
+      {getUrgencyLabel()}
     </span>
   );
 };
@@ -125,40 +133,42 @@ const EmptyInsightsState: React.FC = () => (
 
 // --- Main Component ---
 
-interface ReflectionStepProps {
-  relationshipsByColumn: RelationshipColumns;
-}
-
-const ReflectionStep: React.FC<ReflectionStepProps> = ({ relationshipsByColumn }) => {
-  // Transform relationships into a flat list of people for reflection
-  const peopleForReflection = useMemo(() => {
-    const people: PersonForReflection[] = [];
-    Object.entries(relationshipsByColumn).forEach(([category, relationships]) => {
-      if (category !== 'Uncategorized') {
-        relationships.forEach(rel => {
-          if (rel.category && rel.relationshipStatus) {
-            people.push({
-              ...rel,
-              reflectionAnswers: {}
-            });
-          }
-        });
-      }
-    });
-    return people;
-  }, [relationshipsByColumn]);
-
+const ReflectionStep: React.FC<ReflectionStepProps> = ({ onNavigate }) => {
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [currentPersonIndex, setCurrentPersonIndex] = useState(0);
   const [visibleInsights, setVisibleInsights] = useState<number[]>([]);
   const [isAnimating, setIsAnimating] = useState(false);
   const [currentQuestionSet, setCurrentQuestionSet] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
-  const currentPerson = peopleForReflection[currentPersonIndex];
+  // Fetch categorized contacts from API
+  const fetchCategorizedContacts = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const allContacts = await contactsApi.getAllContacts();
+      // Filter to only contacts with relationshipType set
+      const categorized = allContacts.filter((contact: Contact) => contact.relationshipType);
+      setContacts(categorized);
+    } catch (err) {
+      console.error('Failed to fetch categorized contacts:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load contacts');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCategorizedContacts();
+  }, [fetchCategorizedContacts]);
+
+  const currentPerson = contacts[currentPersonIndex];
   const currentQuestions = QUESTION_SETS[currentQuestionSet];
 
   const handleNext = () => {
-    if (currentPersonIndex < peopleForReflection.length - 1) {
+    if (currentPersonIndex < contacts.length - 1) {
       setCurrentPersonIndex(prev => prev + 1);
       setVisibleInsights([]);
       setIsAnimating(false);
@@ -172,7 +182,7 @@ const ReflectionStep: React.FC<ReflectionStepProps> = ({ relationshipsByColumn }
     setIsAnimating(true);
     setVisibleInsights([]);
     
-    MOCK_INSIGHTS.forEach((insight, index) => {
+    MOCK_INSIGHTS.forEach((insight) => {
       setTimeout(() => {
         setVisibleInsights(prev => [...prev, insight.id]);
       }, insight.delay * 1000);
@@ -189,6 +199,66 @@ const ReflectionStep: React.FC<ReflectionStepProps> = ({ relationshipsByColumn }
     }, 150); // Half of the transition duration
   };
 
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-amber-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-gray-600 text-lg mb-4">Loading contacts for reflection...</div>
+          <div className="animate-spin h-8 w-8 border-4 border-purple-600 border-t-transparent rounded-full mx-auto"></div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-amber-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-red-600 mb-4">Error Loading Contacts</h2>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <button 
+            onClick={fetchCategorizedContacts} 
+            className="px-6 py-3 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition-colors"
+          >
+            Try Again
+          </button>
+          <button 
+            onClick={() => onNavigate('dashboard')} 
+            className="ml-4 px-6 py-3 bg-gray-600 text-white rounded-xl font-medium hover:bg-gray-700 transition-colors"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Empty state - no categorized contacts
+  if (contacts.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-amber-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">No contacts to reflect on</h2>
+          <p className="text-gray-600 mb-6">Please categorize some contacts first.</p>
+          <button 
+            onClick={() => onNavigate('sorting')} 
+            className="px-6 py-3 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition-colors"
+          >
+            Go to Sorting
+          </button>
+          <button 
+            onClick={() => onNavigate('dashboard')} 
+            className="ml-4 px-6 py-3 bg-gray-600 text-white rounded-xl font-medium hover:bg-gray-700 transition-colors"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!currentPerson) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-amber-50">
@@ -203,16 +273,29 @@ const ReflectionStep: React.FC<ReflectionStepProps> = ({ relationshipsByColumn }
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-amber-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-6xl mx-auto">
+        {/* Header with Back Button */}
+        <div className="flex items-center justify-between mb-8">
+          <button 
+            onClick={() => onNavigate('dashboard')} 
+            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to Dashboard
+          </button>
+        </div>
+
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
           {/* Progress indicator */}
           <div className="px-6 py-4 bg-gray-50 border-b">
             <div className="flex items-center justify-between">
               <div className="text-sm text-gray-600">
-                {currentPersonIndex + 1} of {peopleForReflection.length}
+                {currentPersonIndex + 1} of {contacts.length}
               </div>
               <div className="flex gap-2">
-                <CategoryTag category={currentPerson.category!} />
-                <StatusTag category={currentPerson.category!} status={currentPerson.relationshipStatus!} />
+                <CategoryTag category={currentPerson.relationshipType!} />
+                <UrgencyTag urgencyLevel={currentPerson.urgencyLevel || 1} />
               </div>
             </div>
           </div>
@@ -221,7 +304,7 @@ const ReflectionStep: React.FC<ReflectionStepProps> = ({ relationshipsByColumn }
             {/* Left side - Conversation Prompts */}
             <div className="space-y-8">
               <h2 className="text-3xl font-bold text-gray-900 mb-6">
-                Let's talk about {currentPerson.name}
+                Let&apos;s talk about {currentPerson.name}
               </h2>
               
               {/* Question Slots - Always 4 slots */}
@@ -302,12 +385,12 @@ const ReflectionStep: React.FC<ReflectionStepProps> = ({ relationshipsByColumn }
               <button
                 onClick={handleNext}
                 className={`px-6 py-3 rounded-xl font-semibold text-white shadow-lg transition-all duration-200 transform hover:scale-105 ${
-                  currentPersonIndex === peopleForReflection.length - 1
+                  currentPersonIndex === contacts.length - 1
                     ? 'bg-purple-600 hover:bg-purple-700'
                     : 'bg-purple-600 hover:bg-purple-700'
                 }`}
               >
-                {currentPersonIndex === peopleForReflection.length - 1 ? 'Complete' : 'Next'}
+                {currentPersonIndex === contacts.length - 1 ? 'Complete' : 'Next'}
               </button>
             </div>
           </div>
